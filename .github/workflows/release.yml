@@ -1,0 +1,229 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 devaser (https://github.com/devaser)
+#
+# Builds the Windows installer, the Linux .deb packages and the macOS .pkg
+# packages, tests each one, and attaches them to a draft GitHub Release.
+#
+# To make a release:
+#   1. Raise the version in app_version.py and in EasyDLNASetup.iss.
+#   2. git commit, then: git tag v0.3.3 && git push origin main v0.3.3
+#   3. Review the draft release on GitHub and publish it.
+#
+# It can also be started by hand (Actions tab, Run workflow): the packages are
+# built and tested and kept as artifacts, but no release is created.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Check the version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: The version matches everywhere
+        run: python packaging/check_version.py "${{ github.ref_type == 'tag' && github.ref_name || '' }}"
+
+  windows:
+    name: Windows installer
+    needs: version
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install the build tools
+        run: |
+          python -m pip install -r requirements-dev.txt
+          choco install innosetup -y --no-progress
+
+      - name: Build the four executables
+        run: |
+          foreach ($spec in "EasyDLNAService", "EasyDLNATray", "EasyDLNAScanner", "EasyDLNASettings") {
+            python -m PyInstaller --noconfirm --clean "$spec.spec"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Build the installer
+        run: |
+          $iscc = Get-ChildItem "${env:ProgramFiles(x86)}\Inno Setup *\ISCC.exe" | Sort-Object FullName | Select-Object -Last 1
+          if (-not $iscc) { throw "ISCC.exe was not found" }
+          & $iscc.FullName EasyDLNASetup.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test - install, check the server and uninstall
+        run: |
+          Start-Process -FilePath .\EasyDLNASetup.exe -Wait -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=install.log /TASKS="!firewall"'
+
+          $ok = $false
+          $deadline = (Get-Date).AddSeconds(90)
+
+          while (-not $ok -and (Get-Date) -lt $deadline) {
+            try {
+              $response = Invoke-WebRequest -Uri http://localhost:8200/health -UseBasicParsing -TimeoutSec 3
+              $ok = ($response.StatusCode -eq 200)
+            } catch {
+              Start-Sleep -Seconds 2
+            }
+          }
+
+          sc.exe query EasyDLNAServer
+
+          if (-not $ok) {
+            Get-Content install.log -Tail 80
+            Get-Content "$env:ProgramData\Easy DLNA Server\logs\service.log" -Tail 80 -ErrorAction SilentlyContinue
+            throw "The server did not answer after the installation."
+          }
+
+          Write-Host "The server answers."
+
+          Start-Process -FilePath "$env:ProgramFiles\Easy DLNA Server\unins000.exe" -Wait -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART'
+
+          sc.exe query EasyDLNAServer
+          if ($LASTEXITCODE -ne 1060) {
+            throw "The service is still installed after the uninstall."
+          }
+
+          Write-Host "The service was removed."
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-installer
+          path: EasyDLNASetup.exe
+          if-no-files-found: error
+
+  linux:
+    name: Linux package (${{ matrix.runner }})
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        # Ubuntu 22.04 is the oldest supported system: a package built here
+        # also runs on newer Ubuntu and Debian releases.
+        runner: [ubuntu-22.04, ubuntu-22.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install the build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-venv curl
+
+      - name: Build the .deb
+        run: bash packaging/linux/build-deb.sh
+
+      - name: Test - install, check the server and remove
+        run: |
+          sudo apt-get install -y ./dist/easydlna_*.deb
+          easydlna --version
+          dpkg-deb -I dist/easydlna_*.deb
+
+          easydlna run > run.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:8200/health && break
+            sleep 1
+          done
+          curl -fsS http://localhost:8200/health
+          kill "$pid"
+          wait "$pid" || true
+          cat run.log
+
+          sudo apt-get remove -y easydlna
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-package-${{ matrix.runner }}
+          path: dist/*.deb
+          if-no-files-found: error
+
+  macos:
+    name: macOS package (${{ matrix.runner }})
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-15 is Apple silicon (arm64); macos-15-intel is Intel (x86_64).
+        runner: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Build the .pkg
+        run: bash packaging/macos/build-pkg.sh
+
+      - name: Test - install and check the server
+        run: |
+          sudo installer -pkg dist/easydlna-*.pkg -target /
+          easydlna --version
+
+          easydlna run > run.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:8200/health && break
+            sleep 1
+          done
+          curl -fsS http://localhost:8200/health
+          kill "$pid"
+          wait "$pid" || true
+          cat run.log
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos-package-${{ matrix.runner }}
+          path: dist/*.pkg
+          if-no-files-found: error
+
+  publish:
+    name: Draft release
+    if: github.ref_type == 'tag'
+    needs: [windows, linux, macos]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Checksums
+        run: |
+          cd artifacts
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          draft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          files: artifacts/*
+          body: |
+            ## Install
+
+            - **Windows:** run `EasyDLNASetup.exe`.
+            - **Ubuntu and Debian:** `sudo apt install ./easydlna_*.deb`, then `easydlna setup`.
+            - **macOS (experimental):** open the `.pkg` for your processor, then `easydlna setup`.
+
+            The complete source code of this version is on this page ("Source code" below) and in the repository, as required by the GPL.

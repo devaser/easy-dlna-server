@@ -1,0 +1,14 @@
+# Normalize line endings in the repository; the working copy keeps the OS default.
+* text=auto
+
+# Always LF
+*.py text eol=lf
+*.md text eol=lf
+*.sql text eol=lf
+*.sh text eol=lf
+*.txt text eol=lf
+*.spec text eol=lf
+
+# Windows files
+*.iss text eol=crlf
+*.bat text eol=crlf

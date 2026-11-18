@@ -1,0 +1,7 @@
+# Needed on every system
+aiohttp
+
+# Windows only: service, tray and settings
+pywin32; sys_platform == "win32"
+pystray; sys_platform == "win32"
+Pillow; sys_platform == "win32"

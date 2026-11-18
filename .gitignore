@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Build output (the installer goes in GitHub Releases, not in the repository)
+build/
+dist/
+*.exe
+*.msi
+*.wixpdb
+
+# Logs
+*.log
+logs/
+
+# Local data and configuration
+database/library.db
+config/shared_folders.json
+
+# Linux and macOS packages
+*.deb
+*.pkg

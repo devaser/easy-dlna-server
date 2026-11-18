@@ -1,0 +1,94 @@
+Resumen técnico: Easy DLNA Server
+1. Objetivo
+
+Servidor multimedia DLNA/UPnP ligero, de código abierto. Comparte carpetas de vídeo en la red local con TV y reproductores. Soporta subtítulos SRT externos, marcadores de reproducción, SSDP, un servidor HTTP con rangos y una biblioteca SQLite.
+
+Licencia: GPL-3.0-or-later. Copyright: Copyright (C) 2026 devaser (https://github.com/devaser).
+Publicación: repositorio previsto https://github.com/devaser/EasyDLNAServer, aún sin crear. Antes se llamaba “SMSNG DLNA Server” y se renombró por motivos legales.
+Idioma: todo el proyecto va en inglés (código, comentarios, instalador, README y ejemplos, por ejemplo ~/Videos sin tilde). Con el usuario se habla en español.
+2. Arquitectura y stack
+Lenguaje y dependencias: Python 3.13 en Windows, 3.12 probado en Ubuntu, mínimo 3.9. aiohttp para todos los sistemas. pywin32, pystray y Pillow solo en Windows. pyinstaller solo para compilar. Los requirements.txt usan marcadores sys_platform.
+Base de datos: SQLite en modo WAL (library.db), esquema en database/schema.sql.
+Datos (platform_paths.get_data_dir()):
+Windows: %ProgramData%\Easy DLNA Server.
+Linux como usuario: ~/.local/share/easydlna.
+Linux como sistema (root o usuario easydlna): /var/lib/easydlna.
+macOS: ~/Library/Application Support/Easy DLNA Server (o /Library/... como sistema).
+Se puede sobrescribir con EASYDLNA_DATA_DIR.
+Dentro: config/shared_folders.json (lista de rutas), config/settings.json ({"http_port": N}), config/device_uuid.txt (UUID único por instalación), database/library.db, logs/ y, en Linux/macOS, scan.lock.
+Estructura (los ficheros me llegan planos y el usuario los coloca):
+Raíz: main.py, service.py (solo Windows), tray.py (solo Windows), shared_folders.py (Settings con tkinter), scan_library.py, scan_lock.py, power.py, platform_paths.py, app_settings.py, windows_firewall.py, easydlna.py (CLI), EasyDLNASetup.iss, README.md, THIRD_PARTY_NOTICES.md, requirements*.txt, .gitignore, .gitattributes, LICENSE y los EasyDLNA*.spec.
+database/: db.py, schema.sql.
+media/: scanner.py, subtitles.py.
+server/: http_server.py, didl.py, upnp.py, ssdp.py, device.py.
+Herramientas de un solo uso, no se suben al repositorio: rename_project.py, find_spanish.py.
+Ficheros que no he visto: schema.sql, subtitles.py y los .spec.
+Lógica clave
+main.py: arranca la base de datos y escanea, solo si hay carpetas válidas. Si no hay carpetas o el escaneo falla, el servidor sigue. Luego inicia power, el servidor HTTP y SSDP, y espera al evento de parada.
+ssdp.py: no necesita red al arrancar. Una tarea revisa las interfaces cada 10 s. En Linux las enumera por ioctl y descarta docker, veth, br-, virbr, tun, tailscale y wg. Se une y deja el grupo multicast por interfaz y manda NOTIFY al cambiar y cada 900 s. En macOS usa SO_REUSEPORT.
+upnp.py y http_server.py: las URL usan el host de la petición (request.url.host) y el puerto configurado. stream_file(keep_awake=True) avisa a power.
+device.py: UUID persistente. Si no puede guardarlo, deriva uno estable del nombre del equipo.
+power.py: en Windows usa PowerCreateRequest con el motivo “Easy DLNA Server is streaming media” (respaldo SetThreadExecutionState). En Linux usa systemd-inhibit y en macOS caffeinate. Gracia de 300 s tras la última transmisión.
+scan_lock.py: mutex Local\EasyDLNA_LibraryScan en Windows y flock en POSIX. Un segundo escaneo sale con código 3 y el tray y Settings lo muestran como “already running”.
+scanner.py: distingue mayúsculas solo en Linux e ignora los ficheros ._*.
+tray.py: controla el servicio con win32service. Al salir cierra Settings (primero con taskkill suave, luego forzado) y mata el árbol del escáner.
+shared_folders.py: carpetas, campo “HTTP port” (1024-65535) y, al guardar, lanza el escáner en segundo plano (salida a scan.log). En Windows reinicia el servicio con cmd /c net stop EasyDLNAServer & net start EasyDLNAServer. Los usuarios pueden arrancar y parar el servicio por el SDDL.
+service.py: servicio pywin32 EasyDLNAServer. Al arrancar llama a sync_http_rule(get_http_port()).
+easydlna.py: comandos run, setup, install-service [--user|--system] [--firewall] [--no-start] [--dry-run], uninstall-service, start|stop|restart|enable|disable, status, logs [-f], folders list|add|remove [--no-scan], scan, port [N] [--reset] [--no-restart] [--force] y firewall open|close [--port] [--dry-run].
+Unidades systemd: usuario (WantedBy=default.target) o sistema (User=easydlna, StateDirectory=easydlna, endurecimiento). Llevan Restart=on-failure, RestartPreventExitStatus=78, StartLimitBurst=5 y StartLimitIntervalSec=60.
+Puerto ocupado: run sale con el código 78 y un mensaje claro.
+Modo sistema: los comandos que escriben requieren sudo y bajan privilegios al usuario easydlna. port exige root y hace chown de settings.json.
+Mensajes: invocation() muestra la ruta absoluta del comando bajo sudo.
+Cortafuegos: reglas ufw para las redes privadas 10/8, 172.16/12 y 192.168/16, con el comentario “Easy DLNA Server”.
+Instalador Windows (EasyDLNASetup.iss, Inno Setup 6.3 o posterior, solo inglés, AppId={B1F4C7A2-5D3E-4A89-8E26-9C0D7F3A1B64}, versión 0.3.2):
+Antes de copiar: cierra el tray, Settings y Scanner con taskkill. Si el servicio existe, lo para y espera a que desaparezca su proceso (lo mata a los 60 s) y lo elimina.
+Después de copiar: instala el servicio con --startup auto install (con alternativas), sc config start= delayed-auto, sidtype unrestricted y sdset con permiso para usuarios interactivos.
+Firewall: tarea opcional marcada por defecto. Crea EasyDLNA_SSDP (UDP 1900) y EasyDLNA_HTTP (TCP 8200) con program, service, remoteip=localsubnet y perfiles private, domain y public.
+Directorios y accesos: [Dirs] con permiso de modificación para usuarios en {commonappdata}\Easy DLNA Server, que no se borra al desinstalar. Acceso directo del tray en el inicio de todos los usuarios.
+Silencioso: /VERYSILENT /TASKS="!firewall".
+Compilación Windows: un .spec por ejecutable, con py -3.13 -m PyInstaller --noconfirm --clean EasyDLNA<X>.spec, y después ISCC.exe EasyDLNASetup.iss. Genera dist\EasyDLNA{Service,Tray,Scanner,Settings}.exe.
+3. Estado actual
+Windows: el usuario recompiló los cuatro ejecutables y el instalador, antes de los últimos cambios del puerto, y reportó que “todo parece funcionar”. Resueltos: el servicio ya no se detiene sin carpetas, el arranque con red tardía y el UUID único. Quedó pendiente de confirmar powercfg /requests durante una reproducción.
+Linux (VPS Ubuntu, Python 3.12): setup como servicio de usuario funciona. Respondieron status, curl /health y /device.xml. Un fallo inicial se debió a que el puerto 8200 estaba ocupado por un run abierto en otra sesión, y se corrigió con el código 78 y el aviso previo.
+Probado solo en mi entorno con simulaciones: platform_paths, escáner y base de datos en Linux, scan_lock, power, el bucle de red de ssdp, app_settings, windows_firewall, el comando port y la lógica de Settings.
+4. Punto exacto
+
+Estábamos implementando el puerto HTTP configurable. Ya hecho:
+
+app_settings.py (get_http_port, set_http_port, validate_port, y la variable EASYDLNA_HTTP_PORT que manda sobre el fichero).
+Lectura del puerto en http_server.py, ssdp.py, upnp.py y main.py.
+El comando easydlna port y el campo de Settings.
+windows_firewall.sync_http_rule, que hoy usa netsh ... set rule ... new protocol=TCP localport=N y solo si la regla existe.
+firewall open|close --port en Linux.
+
+Última petición del usuario, sin implementar: al cambiar el puerto hay que borrar la regla de firewall y volver a crearla con el puerto nuevo, en lugar de modificarla.
+
+Windows: hacerlo en windows_firewall.py, que llama el servicio al arrancar. Solo si la regla EasyDLNA_HTTP existía (comprobar con show rule), para no crearla si el usuario no la quiso. Se borra y se vuelve a añadir con los mismos parámetros del instalador (program del propio .exe, service=EasyDLNAServer, protocol=TCP, localport=N, remoteip=localsubnet, perfiles private, domain y public).
+Linux: que easydlna port N ejecute automáticamente firewall close --port <viejo> y firewall open --port <nuevo> cuando haya ufw y reglas con el comentario “Easy DLNA Server”, si corre como root. Si no, imprimir los comandos con sudo, como hace ahora.
+5. Pendientes
+
+Corto plazo
+
+Implementar y probar el borrado y la recreación de la regla.
+Recompilar los cuatro ejecutables y el instalador. Probar en Windows el cambio de puerto desde Settings: reinicio del servicio, regla de firewall, powercfg /requests y el escaneo automático.
+Linux:
+servicio de sistema desde /opt/easydlna;
+ufw;
+systemd-inhibit --list durante una transmisión (por ejemplo, curl --limit-rate 20k -o /dev/null http://localhost:8200/media/1);
+reinicio con loginctl enable-linger;
+descubrimiento SSDP desde un equipo de la misma red (el servidor es un VPS, así que hace falta una máquina Linux o una virtual en la LAN).
+Crear un envoltorio ~/.local/bin/easydlna para poder escribir solo easydlna. Con el paquete .deb será /usr/bin/easydlna.
+README, en inglés: sección de Linux y del puerto configurable.
+Publicar: descargar LICENSE, crear el repositorio, git init con .gitattributes, git config user.name "devaser" y el correo noreply de GitHub, y una Release con EasyDLNASetup.exe. La GPL exige enlazar el código fuente.
+
+Medio plazo
+
+Paquete .deb (ejecutable PyInstaller de easydlna.py, con easydlna setup para elegir usuario o sistema).
+Settings e icono opcional en Linux (python3-tk, AppIndicator).
+macOS: launchd, barra de menú (rumps o pystray) y distribución (Homebrew o .dmg; sin firma de Apple el sistema avisa).
+Compilación automática en GitHub Actions para Windows, Ubuntu y macOS.
+Seguridad: el servicio corre como SYSTEM y lee una configuración editable por cualquier usuario local. Se valoró ejecutarlo con LocalService.
+Comprobar icacls sobre %ProgramData%\Easy DLNA Server (Users con M) para el antiguo problema de “solo lectura” de la base.
+Para el chat nuevo
+
+El chat nuevo no verá los ficheros que generé, así que adjunta el proyecto (sin build, dist ni logs) o al menos windows_firewall.py, service.py, easydlna.py y app_settings.py, que son los que se tocan en el siguiente paso. Las rutas reales del usuario: Windows D:\scripts\EasyDLNAServer, Linux ~/EasyDLNAServer con .venv.
