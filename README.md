@@ -1,3 +1,12 @@
+## ☕ Support
+
+I build and maintain these tools in my free time for free. If this project saved you some time or you find it useful, consider buying me a coffee to support future updates!
+
+[![Buy Me A Coffee](https://shields.io)](https://buymeacoffee.com/devaser)
+
+
+
+
 # Easy DLNA Server
 
 A lightweight DLNA/UPnP media server for Windows. It runs as a Windows service, shares the folders you choose with DLNA clients (TVs, game consoles, media players) on your local network, and comes with a system tray app to control it.
