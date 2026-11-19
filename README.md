@@ -1,15 +1,15 @@
-## ☕ Support
-
-I build and maintain these tools in my free time for free. If this project saved you some time or you find it useful, consider buying me a coffee to help me cover a premium AI subscription so I can keep building and improving tools like this!
-
-<a href="https://www.buymeacoffee.com/devaser" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" style="height: 60px !important;width: 217px !important;" ></a>
-
-
-
 
 # Easy DLNA Server
 
-A lightweight DLNA/UPnP media server for Windows. It runs as a Windows service, shares the folders you choose with DLNA clients (TVs, game consoles, media players) on your local network, and comes with a system tray app to control it.
+A lightweight DLNA/UPnP media server originally built for Windows and ported to Linux and macOS. It is optimized for modern Samsung Tizen TVs, though it should work with any standard DLNA client. It runs as a background service (Windows service), shares your selected folders with devices on your local network (TVs, game consoles, media players), and includes a system tray app for easy control.
+There is no transcoding yet, though external SRT subtitles are supported.
+
+Roadmap / Planned Features
+
+• Audio Transcoding: Add transcoding support, primarily for DTS and TrueHD audio tracks not natively supported by Samsung TVs.
+• PGS Subtitle Handling: Intercept or strip PGS subtitles, as their presence currently prevents text-based subtitles from displaying their language correctly in the TV's menu.
+• Container Remuxing: Remux MP4 containers to MKV on the fly, as embedded subtitles in MP4 files do not currently work properly.
+
 
 ## Components
 
@@ -160,6 +160,14 @@ The **CI** workflow checks every push and pull request: Python and shell syntax,
 ## License
 
 Copyright (C) 2026 [devaser](https://github.com/devaser)
+
+
+
+## ☕ Support
+
+I build and maintain these tools in my free time for free. If this project saved you some time or you find it useful, consider buying me a coffee to help me cover a premium AI subscription so I can keep building and improving tools like this!
+
+<a href="https://www.buymeacoffee.com/devaser" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
 Easy DLNA Server is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. See the [LICENSE](LICENSE) file for the full text.
 
