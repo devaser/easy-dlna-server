@@ -93,7 +93,7 @@ The HTTP port is 8200 by default. Change it with `easydlna port NUMBER`; the ser
 
 To remove the package: `sudo apt remove easydlna` (or `purge` to also delete the data of the system service).
 
-## Install on macOS (experimental, not tested yet)
+## Install on macOS (experimental, tried and works)
 
 1. Download `easydlna-<version>-<architecture>.pkg` and open it. The package is not signed, so macOS asks you to confirm it (right-click the package, then Open).
 2. Run `easydlna setup` to start it when you log in, then `easydlna folders add ~/Movies`.
