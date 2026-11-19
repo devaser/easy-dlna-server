@@ -27,9 +27,9 @@ jobs:
     name: Check the version
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -41,9 +41,9 @@ jobs:
     needs: version
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
@@ -101,6 +101,11 @@ jobs:
 
           Write-Host "The service was removed."
 
+          # sc.exe returned 1060 (service not found), which is what we wanted.
+          # GitHub ends a PowerShell step with the exit code of the last
+          # program, so make sure the step ends with success.
+          exit 0
+
       - uses: actions/upload-artifact@v7
         with:
           name: windows-installer
@@ -118,7 +123,7 @@ jobs:
         runner: [ubuntu-22.04, ubuntu-22.04-arm]
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v6
 
       - name: Install the build tools
         run: |
@@ -163,9 +168,9 @@ jobs:
         runner: [macos-15, macos-15-intel]
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
