@@ -2,7 +2,7 @@
 
 I build and maintain these tools in my free time for free. If this project saved you some time or you find it useful, consider buying me a coffee to support future updates!
 
-[![Buy Me A Coffee](https://shields.io)](https://buymeacoffee.com/devaser)
+[![Buy Me A Coffee](https://buymeacoffee.com)](https://buymeacoffee.com/devaser)
 
 
 
