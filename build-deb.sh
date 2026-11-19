@@ -93,7 +93,7 @@ Installed-Size: $INSTALLED_SIZE
 Depends: libc6 (>= $GLIBC)
 Recommends: systemd
 Suggests: ufw
-Homepage: https://github.com/devaser/EasyDLNAServer
+Homepage: https://github.com/devaser/easy-dlna-server
 Description: Lightweight DLNA/UPnP media server
  Easy DLNA Server shares your video folders with TVs and media players on
  your local network. It supports external SRT subtitles and playback

@@ -13,7 +13,7 @@ A lightweight DLNA/UPnP media server for Windows. It runs as a Windows service, 
 
 ## Install
 
-1. Download `EasyDLNASetup.exe` from the [Releases](https://github.com/devaser/EasyDLNAServer/releases) page.
+1. Download `EasyDLNASetup.exe` from the [Releases](https://github.com/devaser/easy-dlna-server/releases) page.
 2. Run it as administrator.
 3. Leave **Allow Easy DLNA Server through Windows Firewall** selected so other devices on your network can find the server. This creates two inbound rules, only for the Easy DLNA service:
    - UDP 1900 (SSDP discovery)

@@ -16,6 +16,6 @@ It uses the third-party components listed below. The licenses are summarized fro
 
 ## pystray (LGPL-3.0-or-later)
 
-The executables are built with PyInstaller and include pystray. The complete corresponding source code of Easy DLNA Server is available at https://github.com/devaser/EasyDLNAServer. You can replace the bundled pystray with another version by rebuilding the executables from source (see `README.md`).
+The executables are built with PyInstaller and include pystray. The complete corresponding source code of Easy DLNA Server is available at https://github.com/devaser/easy-dlna-server. You can replace the bundled pystray with another version by rebuilding the executables from source (see `README.md`).
 
 The LGPL-3.0 license text is available at https://www.gnu.org/licenses/lgpl-3.0.txt.

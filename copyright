@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: Easy DLNA Server
 Upstream-Contact: https://github.com/devaser
-Source: https://github.com/devaser/EasyDLNAServer
+Source: https://github.com/devaser/easy-dlna-server
 
 Files: *
 Copyright: 2026 devaser <https://github.com/devaser>

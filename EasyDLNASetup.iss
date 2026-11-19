@@ -45,7 +45,7 @@
 #define MyAppName "Easy DLNA Server"
 #define MyAppVersion "0.3.2"
 #define MyAppPublisher "devaser"
-#define MyAppURL "https://github.com/devaser/EasyDLNAServer"
+#define MyAppURL "https://github.com/devaser/easy-dlna-server"
 
 [Setup]
 ; Unique application ID: never reuse it for a different product.
