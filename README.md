@@ -1,6 +1,6 @@
 ## ☕ Support
 
-I build and maintain these tools in my free time for free. If this project saved you some time or you find it useful, consider buying me a coffee to support future updates!
+I build and maintain these tools in my free time for free. If this project saved you some time or you find it useful, consider buying me a coffee to help me cover a premium AI subscription so I can keep building and improving tools like this!
 
 <a href="https://www.buymeacoffee.com/devaser" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
