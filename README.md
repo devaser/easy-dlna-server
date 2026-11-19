@@ -7,7 +7,9 @@ There is no transcoding yet, though external SRT subtitles are supported.
 Roadmap / Planned Features
 
 • Audio Transcoding: Add transcoding support, primarily for DTS and TrueHD audio tracks not natively supported by Samsung TVs.
+
 • PGS Subtitle Handling: Intercept or strip PGS subtitles, as their presence currently prevents text-based subtitles from displaying their language correctly in the TV's menu.
+
 • Container Remuxing: Remux MP4 containers to MKV on the fly, as embedded subtitles in MP4 files do not currently work properly.
 
 
