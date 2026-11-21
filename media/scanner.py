@@ -5,6 +5,7 @@
 import os
 import mimetypes
 import sqlite3
+import sys
 from pathlib import Path
 
 from database.db import connect, get_shared_folders
@@ -66,10 +67,21 @@ def get_mime_type(file_path):
     )
 
 
+# Windows and macOS file systems are normally case-insensitive; Linux is not.
+CASE_INSENSITIVE_FILESYSTEM = (
+    os.name == "nt" or sys.platform == "darwin"
+)
+
+
 def normalize_path(file_path):
-    return os.path.normcase(
+    normalized = os.path.normcase(
         os.path.abspath(str(file_path))
-    ).casefold()
+    )
+
+    if CASE_INSENSITIVE_FILESYSTEM:
+        return normalized.casefold()
+
+    return normalized
 
 
 def scan_library():
@@ -110,6 +122,11 @@ def scan_library():
                 folder = Path(root)
 
                 for filename in filenames:
+
+                    # macOS metadata files ("._name.mkv") are not videos.
+                    if filename.startswith("._"):
+                        continue
+
                     file_path = folder / filename
 
                     if (

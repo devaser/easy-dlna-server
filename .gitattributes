@@ -12,3 +12,7 @@
 # Windows files
 *.iss text eol=crlf
 *.bat text eol=crlf
+
+# Shell, CI and Debian packaging files
+*.yml text eol=lf
+packaging/linux/debian/* text eol=lf
