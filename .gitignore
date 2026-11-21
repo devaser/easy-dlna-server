@@ -22,3 +22,15 @@ config/shared_folders.json
 # Linux and macOS packages
 *.deb
 *.pkg
+
+# OS and editor files
+.DS_Store
+.idea/
+.vscode/
+
+# SQLite journal files
+*.db-wal
+*.db-shm
+
+# Backups
+*.bak
