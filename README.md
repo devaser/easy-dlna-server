@@ -100,6 +100,57 @@ To remove the package: `sudo apt remove easydlna` (or `purge` to also delete the
 
 macOS supports the user service only. The first time, the macOS firewall asks for permission: choose Allow.
 
+## Subtitles
+
+Easy DLNA Server looks for `.srt` files next to each video, with the same name:
+
+```
+Movie.mkv
+Movie.srt          (no language, listed first)
+Movie.en.srt
+Movie.es.srt
+Movie.pt-BR.srt
+```
+
+- **Samsung TVs** can use only one external subtitle, so they get the first one: the file without a language, or else the first by name.
+- **LG (webOS) and other standard DLNA clients** get every subtitle. The language is part of the subtitle URL (for example `es.srt`), but most TVs do not show it, so the tracks usually appear as "Subtitle 1, 2, 3". Results vary by TV model.
+
+## Troubleshooting
+
+### Log every HTTP request
+
+If a TV does not behave as expected, turn on the HTTP debug log. It is off by default. When on, the server writes to its log every request it receives (path, `Range` and `User-Agent`), plus the library browsing exchange with the TV, which shows what the TV asks for and what it is sent. The log then contains the IP addresses of your devices and the titles of your videos, so review it before sharing it.
+
+Set the variable `EASYDLNA_DEBUG_HTTP=1` and restart the service:
+
+- **Windows service** (run PowerShell as administrator):
+
+  ```
+  New-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\EasyDLNAServer -Name Environment -PropertyType MultiString -Value "EASYDLNA_DEBUG_HTTP=1" -Force
+  Restart-Service EasyDLNAServer
+  ```
+
+  To turn it off, run `Remove-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\EasyDLNAServer -Name Environment` and restart the service.
+  The log is `%ProgramData%\Easy DLNA Server\logs\service.log` (you can also open it from the tray menu).
+
+- **Linux (systemd):** run `sudo systemctl edit easydlna` (or `systemctl --user edit easydlna` for the user service) and add:
+
+  ```
+  [Service]
+  Environment=EASYDLNA_DEBUG_HTTP=1
+  ```
+
+  Then run `easydlna restart` and read the log with `easydlna logs -f`. Delete those lines to turn it off.
+
+- **macOS, or any system in the foreground:** stop the service and run the server in a terminal:
+
+  ```
+  easydlna stop
+  EASYDLNA_DEBUG_HTTP=1 easydlna run
+  ```
+
+  Press Ctrl+C when you are done. From source on Windows, use `set EASYDLNA_DEBUG_HTTP=1` before `py -3.13 main.py`.
+
 ## Build from source
 
 Requirements: Windows and Python 3.13.
