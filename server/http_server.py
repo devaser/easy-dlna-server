@@ -3,6 +3,7 @@
 
 
 import asyncio
+import os
 from pathlib import Path
 
 from aiohttp import web
@@ -12,7 +13,8 @@ from app_settings import get_http_port
 from database.db import get_media, connect
 from server.upnp import (
     handle_content_directory,
-    content_directory_description
+    content_directory_description,
+    sort_subtitles
 )
 from server.device import DEVICE_UUID
 from server.ssdp import get_local_ip_or_none
@@ -22,6 +24,12 @@ HOST = "0.0.0.0"
 PORT = get_http_port()
 
 CHUNK_SIZE = 256 * 1024
+
+# The Samsung subtitle URL (/subtitle/ID) keeps its original type.
+# The URL with a file name (/subtitle/ID/es.srt) is the one that
+# standard clients get, and is announced as text/srt.
+SUBTITLE_MIME_SAMSUNG = "application/x-subrip; charset=utf-8"
+SUBTITLE_MIME_STANDARD = "text/srt; charset=utf-8"
 
 DLNA_FLAGS = (
     "DLNA.ORG_OP=01;"
@@ -325,34 +333,31 @@ async def stream_file(request, file_path, content_type,
     return response
 
 
-def get_first_subtitle_id(media_id):
+def get_first_subtitle_id(media_id, video_path):
 
     conn = connect()
 
     try:
-        row = conn.execute(
+        rows = conn.execute(
             """
             SELECT id, subtitle_path
             FROM subtitles
             WHERE media_id = ?
-            ORDER BY id
-            LIMIT 1
             """,
             (media_id,)
-        ).fetchone()
-
-        if row is None:
-            return None
-
-        subtitle_path = Path(row[1])
-
-        if not subtitle_path.is_file():
-            return None
-
-        return row[0]
+        ).fetchall()
 
     finally:
         conn.close()
+
+    for subtitle_id, subtitle_path in sort_subtitles(
+        video_path,
+        rows
+    ):
+        if Path(subtitle_path).is_file():
+            return subtitle_id
+
+    return None
 
 
 async def stream_media(request):
@@ -382,7 +387,8 @@ async def stream_media(request):
 
         subtitle_id = await asyncio.to_thread(
             get_first_subtitle_id,
-            media_id
+            media_id,
+            file_path
         )
 
         if subtitle_id is not None:
@@ -444,10 +450,15 @@ async def stream_subtitle(request):
 
     file_path = Path(subtitle[0])
 
+    if "name" in request.match_info:
+        subtitle_mime = SUBTITLE_MIME_STANDARD
+    else:
+        subtitle_mime = SUBTITLE_MIME_SAMSUNG
+
     return await stream_file(
         request,
         file_path,
-        "application/x-subrip; charset=utf-8",
+        subtitle_mime,
         {
             "Content-Disposition": "inline"
         }
@@ -570,9 +581,82 @@ async def health(request):
     })
 
 
+# Debugging aid, off by default: set EASYDLNA_DEBUG_HTTP=1 to log every
+# HTTP request (path, Range, User-Agent and the Browse exchange), which
+# shows what a TV asks for.
+DEBUG_HTTP = os.environ.get("EASYDLNA_DEBUG_HTTP") == "1"
+
+
+@web.middleware
+async def log_requests(request, handler):
+
+    if request.path == "/health":
+        return await handler(request)
+
+    agent = request.headers.get("User-Agent", "-")
+    byte_range = request.headers.get("Range", "-")
+
+    print(
+        f"[HTTP] {request.remote} {request.method} "
+        f"{request.path_qs} range={byte_range} agent={agent}",
+        flush=True
+    )
+
+    is_browse = request.path == "/upnp/contentdirectory"
+
+    if is_browse:
+        try:
+            body = await request.text()
+            print(
+                "[HTTP]   SOAPAction="
+                f"{request.headers.get('SOAPAction', '-')}",
+                flush=True
+            )
+            print(f"[HTTP]   request body: {body[:1200]}", flush=True)
+        except Exception as error:
+            print(f"[HTTP]   cannot read body: {error}", flush=True)
+
+    try:
+        response = await handler(request)
+
+    except web.HTTPException as error:
+        print(
+            f"[HTTP]   -> {error.status} for {request.path}",
+            flush=True
+        )
+        raise
+
+    except Exception as error:
+        print(
+            f"[HTTP]   -> ERROR for {request.path}: {error!r}",
+            flush=True
+        )
+        raise
+
+    print(
+        f"[HTTP]   -> {response.status} "
+        f"{response.content_type} for {request.path}",
+        flush=True
+    )
+
+    if is_browse:
+        response_text = getattr(response, "text", None)
+
+        if response_text and "/subtitle/" in response_text:
+            print(
+                f"[HTTP]   response with subtitles: "
+                f"{response_text[:5000]}",
+                flush=True
+            )
+
+    return response
+
+
 def create_app():
 
-    app = web.Application()
+    middlewares = [log_requests] if DEBUG_HTTP else []
+
+    app = web.Application(middlewares=middlewares)
 
     app.router.add_get("/health", health)
     app.router.add_get("/device.xml", device_description)
@@ -604,6 +688,11 @@ def create_app():
 
     app.router.add_get(
         "/subtitle/{subtitle_id}",
+        stream_subtitle
+    )
+
+    app.router.add_get(
+        "/subtitle/{subtitle_id}/{name}",
         stream_subtitle
     )
 

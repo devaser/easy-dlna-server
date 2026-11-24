@@ -43,7 +43,7 @@
 ; Keep this file ASCII only, or save it as UTF-8 with BOM.
 
 #define MyAppName "Easy DLNA Server"
-#define MyAppVersion "0.3.2"
+#define MyAppVersion "0.3.3"
 #define MyAppPublisher "devaser"
 #define MyAppURL "https://github.com/devaser/easy-dlna-server"
 

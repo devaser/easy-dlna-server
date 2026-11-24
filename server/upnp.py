@@ -4,6 +4,7 @@
 
 import asyncio
 import base64
+import re
 import xml.etree.ElementTree as ET
 
 from pathlib import Path
@@ -49,6 +50,10 @@ VIDEO_EXTENSIONS = {
 }
 
 MINIMUM_BOOKMARK_SECONDS = 30
+
+# Standard (non-Samsung) clients read external subtitles from an extra
+# <res> element of the video item.
+SUBTITLE_PROTOCOL_INFO = "http-get:*:text/srt:*"
 
 ET.register_namespace("s", SOAP_NS)
 ET.register_namespace("u", CD_NS)
@@ -136,19 +141,76 @@ def get_media_index(conn):
     return result
 
 
-def get_subtitle_ids(conn, media_id):
+def subtitle_suffix(video_path, subtitle_path):
+    """
+    Returns what follows the video name in a subtitle file name.
+    "Movie.es.srt" -> "es", "Movie.srt" -> "".
+    """
+
+    video_stem = Path(video_path).stem
+    subtitle_stem = Path(subtitle_path).stem
+
+    if subtitle_stem.casefold().startswith(video_stem.casefold() + "."):
+        return subtitle_stem[len(video_stem) + 1:]
+
+    return ""
+
+
+def sort_subtitles(video_path, rows):
+    """
+    rows: list of (subtitle_id, subtitle_path).
+    The subtitle without a language suffix comes first, then the rest by
+    name, so the "first" subtitle is always the same one.
+    """
+
+    def sort_key(row):
+        suffix = subtitle_suffix(video_path, row[1])
+
+        return (
+            suffix != "",
+            suffix.casefold(),
+            Path(row[1]).name.casefold()
+        )
+
+    return sorted(rows, key=sort_key)
+
+
+def subtitle_file_name(video_path, subtitle_path):
+    """
+    File name shown in the subtitle URL, with the language when the file
+    has one: "es.srt", "en.forced.srt" or "subtitle.srt".
+    """
+
+    suffix = subtitle_suffix(video_path, subtitle_path)
+
+    safe = re.sub(
+        r"[^A-Za-z0-9_.-]",
+        "_",
+        suffix
+    ).strip("._")[:40]
+
+    return (safe or "subtitle") + ".srt"
+
+
+def get_subtitle_entries(conn, media_id, video_path):
 
     rows = conn.execute(
         """
-        SELECT id
+        SELECT id, subtitle_path
         FROM subtitles
         WHERE media_id = ?
-        ORDER BY id
         """,
         (media_id,)
     ).fetchall()
 
-    return [row[0] for row in rows]
+    return [
+        (
+            subtitle_id,
+            subtitle_file_name(video_path, subtitle_path)
+        )
+        for subtitle_id, subtitle_path
+        in sort_subtitles(video_path, rows)
+    ]
 
 
 def get_library(object_id, starting_index, requested_count):
@@ -251,9 +313,10 @@ def get_library(object_id, starting_index, requested_count):
                     "size": video["size"],
                     "mime": video["mime"],
                     "bookmark": video["bookmark"],
-                    "subtitles": get_subtitle_ids(
+                    "subtitles": get_subtitle_entries(
                         conn,
-                        video["id"]
+                        video["id"],
+                        video["path"]
                     )
                 })
 
@@ -379,9 +442,10 @@ def get_metadata(object_id):
                 "size": size,
                 "mime": mime_type,
                 "bookmark": get_playback_bookmark(media_id),
-                "subtitles": get_subtitle_ids(
+                "subtitles": get_subtitle_entries(
                     conn,
-                    media_id
+                    media_id,
+                    file_path
                 )
             }
 
@@ -478,7 +542,10 @@ def create_didl(data, host):
                 f"BM={bookmark}"
             )
 
-            for subtitle_id in entry.get("subtitles", []):
+            subtitles = entry.get("subtitles", [])
+
+            # Samsung TVs read a single external subtitle: the first one.
+            if subtitles:
 
                 ET.SubElement(
                     item,
@@ -487,7 +554,21 @@ def create_didl(data, host):
                         qname(SEC_NS, "type"): "srt"
                     }
                 ).text = (
-                    f"http://{host}:{PORT}/subtitle/{subtitle_id}"
+                    f"http://{host}:{PORT}/subtitle/{subtitles[0][0]}"
+                )
+
+            # Standard clients (LG, VLC, Kodi...) get every subtitle.
+            for subtitle_id, file_name in subtitles:
+
+                ET.SubElement(
+                    item,
+                    qname(DIDL_NS, "res"),
+                    {
+                        "protocolInfo": SUBTITLE_PROTOCOL_INFO
+                    }
+                ).text = (
+                    f"http://{host}:{PORT}"
+                    f"/subtitle/{subtitle_id}/{file_name}"
                 )
 
     return ET.tostring(
